@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F1F4F6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#133565" media="(prefers-color-scheme: dark)">
+<title>Palais mental</title>
+<meta name="description" content="Mémoriser une liste de mots par la méthode des lieux, puis vérifier.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+/* Polices embarquées : l'appli fonctionne sans connexion. */
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/ibm-plex-sans-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/ibm-plex-sans-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Literata"; font-style: normal; font-weight: 200 900; font-display: swap; src: url("fonts/literata-latin-opsz-normal.woff2") format("woff2"); }
+/* Plan d'architecte : encre bleue sur papier (clair), lignes claires sur bleu (sombre).
+   Le crayon rouge ne sert qu'aux numéros de lieux et à l'alerte de fin. */
+:root {
+  --paper: #F1F4F6;
+  --grid: #E1E8EF;
+  --ink: #1A3A6C;
+  --ink-2: #566E92;
+  --line: #B8C6D8;
+  --pencil: #C93A2C;
+  --on-ink: #F1F4F6;
+  --scrim: rgba(16, 32, 60, .45);
+  --font-words: "Literata", "Iowan Old Style", Charter, Georgia, "Noto Serif", serif;
+  --font-ui: "IBM Plex Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #133565;
+    --grid: #1A3F72;
+    --ink: #EAF1FA;
+    --ink-2: #A9BFDC;
+    --line: #44699E;
+    --pencil: #FF8F7D;
+    --on-ink: #133565;
+    --scrim: rgba(4, 14, 32, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #133565;
+  --grid: #1A3F72;
+  --ink: #EAF1FA;
+  --ink-2: #A9BFDC;
+  --line: #44699E;
+  --pencil: #FF8F7D;
+  --on-ink: #133565;
+  --scrim: rgba(4, 14, 32, .6);
+  color-scheme: dark;
+}
+
+:root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+*, *::before, *::after { box-sizing: inherit; }
+html {
+  height: 100%;
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+button:disabled { cursor: default; }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--pencil); outline-offset: 3px; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Écrans ---------- */
+.screen {
+  display: none;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  height: 100%;
+  margin: 0 auto;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.screen.active { display: flex; animation: appear .16s ease-out both; }
+@keyframes appear { from { opacity: 0; } }
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.bar { flex: none; }
+
+/* ---------- Boutons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  height: 3.25rem;
+  padding: 0 1.25rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 1rem;
+  white-space: nowrap;
+  transition: transform .1s ease, opacity .15s ease;
+}
+.btn:active:not(:disabled) { transform: scale(.98); }
+.btn:disabled { opacity: .45; }
+.btn-primary { background: var(--ink); color: var(--on-ink); }
+.btn-outline { background: var(--paper); color: var(--ink); border: 1.5px solid var(--ink); }
+.btn-danger { background: var(--pencil); color: var(--on-ink); }
+.btn-text {
+  height: 2.5rem;
+  padding: 0;
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.btn-wide { display: flex; width: 100%; height: 3.5rem; font-size: 1.0625rem; }
+
+/* Numéro de lieu, au crayon rouge */
+.tag {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tagw, 1.875rem);
+  height: 1.875rem;
+  border: 1.5px solid var(--pencil);
+  border-radius: 999px;
+  color: var(--pencil);
+  font-size: .78rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Accueil ---------- */
+.home-scroll { padding: 1.25rem 1.375rem .5rem; text-align: center; }
+.hero { padding: .25rem 0 1rem; }
+.plan { display: block; width: min(13.5rem, 64vw); height: auto; margin: 0 auto; overflow: visible; }
+.plan .wall { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-linecap: square; }
+.plan .leaf { fill: none; stroke: var(--ink); stroke-width: 2; }
+.plan .swing { fill: none; stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 2.5; }
+.plan .route {
+  fill: none;
+  stroke: var(--pencil);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: .1 5;
+  animation: appear .7s .1s ease-out both;
+}
+.plan .locus circle { fill: var(--paper); stroke: var(--pencil); stroke-width: 1.5; }
+.plan .locus text {
+  fill: var(--pencil);
+  font-family: var(--font-ui);
+  font-size: 8.5px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.plan .locus {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: locus .35s cubic-bezier(.3, 1.4, .5, 1) both;
+  animation-delay: calc(.35s + var(--i) * .16s);
+}
+@keyframes locus { from { opacity: 0; transform: scale(.4); } }
+.hero h1 {
+  margin: .875rem 0 .375rem;
+  font-family: var(--font-words);
+  font-weight: 600;
+  font-size: clamp(2.125rem, 9.5vw, 2.625rem);
+  line-height: 1.05;
+  letter-spacing: -.015em;
+  font-variation-settings: "opsz" 72;
+}
+.lede { margin: 0 auto; max-width: 30ch; color: var(--ink-2); }
+.field { padding: 1rem 0 1.125rem; border-top: 1.5px solid var(--line); }
+.field-label { display: block; margin-bottom: .5rem; font-weight: 500; font-size: .9375rem; color: var(--ink-2); }
+.stepper { display: flex; align-items: center; justify-content: center; gap: .75rem; }
+.step {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 1.625rem;
+  line-height: 1;
+  transition: transform .1s ease, opacity .15s ease;
+}
+.step:active:not(:disabled) { transform: scale(.92); }
+.step:disabled { opacity: .3; }
+.num-box {
+  min-width: 8.5rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: .375rem;
+  transition: opacity .15s ease;
+}
+.num-input {
+  width: 2.4ch;
+  margin: 0;
+  padding: 0 0 .125rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-words);
+  font-size: 3rem;
+  font-weight: 500;
+  line-height: 1.15;
+  text-align: center;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-variation-settings: "opsz" 72;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  caret-color: var(--pencil);
+  box-shadow: inset 0 -2px 0 transparent;
+  transition: box-shadow .15s ease;
+}
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.num-input:focus { box-shadow: inset 0 -2px 0 var(--pencil); }
+.unit { font-weight: 500; color: var(--ink-2); }
+.stepper.off .num-box { opacity: .3; }
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: .875rem; }
+.chip {
+  height: 2.5rem;
+  min-width: 2.75rem;
+  padding: 0 .75rem;
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.pace { margin: .875rem 0 0; min-height: 1.5em; color: var(--ink-2); font-size: .9375rem; }
+.home-bar { padding: .625rem 1.375rem .875rem; }
+.note { margin: .625rem 0 0; text-align: center; font-size: .8125rem; color: var(--ink-2); }
+
+/* ---------- Mémorisation ---------- */
+.study-top {
+  display: grid;
+  grid-template-columns: 6rem 1fr 6rem;
+  align-items: center;
+  padding: .5rem .75rem .625rem;
+}
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 6px;
+  color: var(--ink);
+}
+.icon-btn:active { background: var(--grid); }
+.ico {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.timer-box { text-align: center; }
+.timer { font-weight: 600; font-size: 2rem; line-height: 1.1; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+.timer-note { font-size: .8125rem; color: var(--ink-2); }
+#study.low .timer { color: var(--pencil); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .4; } }
+.seg {
+  justify-self: end;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+}
+.seg button {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.125rem;
+  border-radius: 5px;
+  color: var(--ink-2);
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+.progress { height: 3px; margin: 0 1.125rem; background: var(--line); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--ink); transform-origin: left center; transition: transform .25s linear; }
+#study.low .progress-fill { background: var(--pencil); }
+#study.unlimited .progress { visibility: hidden; }
+
+.list-scroll { padding: .375rem 1.375rem 1.25rem; }
+.words { list-style: none; margin: 0; padding: 0; }
+.words li {
+  display: flex;
+  align-items: center;
+  gap: .875rem;
+  padding: .625rem 0;
+  border-bottom: 1px solid var(--line);
+  break-inside: avoid;
+}
+.words .word {
+  min-width: 0;
+  font-family: var(--font-words);
+  font-size: 1.375rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  font-variation-settings: "opsz" 24;
+}
+@media (min-width: 560px) {
+  .words.cols { column-count: 2; column-gap: 2.5rem; }
+}
+
+/* Mode « un mot à la fois » : chaque mot occupe une pièce du plan */
+.room-view {
+  display: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  padding: 1rem 1.25rem .375rem;
+  overflow: hidden;
+}
+#study.mode-room .room-view { display: flex; }
+#study.mode-room .list-scroll { display: none; }
+.room {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem 1rem 3.75rem;
+  text-align: center;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.room-tag {
+  position: absolute;
+  top: .875rem;
+  left: .875rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .875rem;
+  color: var(--ink-2);
+}
+.door { position: absolute; left: 2.25rem; bottom: -3px; width: 50px; height: 53px; pointer-events: none; }
+.door .gap { fill: var(--paper); }
+.door .leaf { fill: none; stroke: var(--ink); stroke-width: 2.5; }
+.door .swing { fill: none; stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 3; }
+.room-word {
+  max-width: 100%;
+  font-family: var(--font-words);
+  font-weight: 500;
+  font-size: var(--wsize, 3rem);
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  overflow-wrap: anywhere;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  font-variation-settings: "opsz" 72;
+}
+.room-word.from-right { animation: from-right .22s cubic-bezier(.2, .8, .2, 1) both; }
+.room-word.from-left { animation: from-left .22s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes from-right { from { opacity: 0; transform: translateX(1.75rem); } }
+@keyframes from-left { from { opacity: 0; transform: translateX(-1.75rem); } }
+.room-nav { display: grid; grid-template-columns: 1fr 1fr; gap: .625rem; padding-top: .875rem; }
+.room-nav .btn { width: 100%; }
+.study-bar { padding: .625rem 1.25rem .875rem; }
+
+/* ---------- Vérification ---------- */
+.recall-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: 1.125rem 1.375rem .875rem;
+  border-bottom: 1.5px solid var(--line);
+}
+.recall-top h2 {
+  margin: 0;
+  font-family: var(--font-words);
+  font-weight: 600;
+  font-size: 1.875rem;
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  font-variation-settings: "opsz" 72;
+}
+.meta { margin: .25rem 0 0; font-size: .875rem; color: var(--ink-2); }
+.score {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  height: 2.375rem;
+  padding: 0 .875rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 6px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.check {
+  display: block;
+  width: .7rem;
+  height: .4rem;
+  border-left: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+  transform: translateY(-.1rem) rotate(-45deg);
+}
+.recall-scroll { padding: .875rem 1.375rem 1.25rem; }
+.hint { margin: 0; max-width: 60ch; color: var(--ink-2); font-size: .9375rem; }
+.reveal-all { margin: .375rem 0 .25rem; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.row { display: flex; align-items: center; gap: .625rem; border-bottom: 1px solid var(--line); }
+.row .reveal {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 3.5rem;
+  display: flex;
+  align-items: center;
+  gap: .875rem;
+  padding: .5rem 0;
+  text-align: left;
+}
+/* Mot caché : zone hachurée, comme une pièce non encore visitée */
+.blank {
+  display: block;
+  width: 6.5rem;
+  height: .875rem;
+  border-radius: 3px;
+  background: repeating-linear-gradient(-45deg, var(--line) 0 2px, transparent 2px 6px);
+}
+.row .word {
+  display: none;
+  min-width: 0;
+  font-family: var(--font-words);
+  font-size: 1.375rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  font-variation-settings: "opsz" 24;
+}
+.row.shown .blank { display: none; }
+.row.shown .word { display: block; animation: appear .2s ease-out both; }
+.mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.625rem;
+  height: 2.625rem;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  color: var(--line);
+  visibility: hidden;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.row.shown .mark { visibility: visible; }
+.row.ok .mark { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.recall-bar {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: .625rem;
+  padding: .625rem 1.25rem .875rem;
+  border-top: 1.5px solid var(--line);
+}
+.recall-bar .btn { width: 100%; }
+
+/* ---------- Dialogue ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: var(--scrim);
+  animation: appear .15s ease-out both;
+}
+.overlay[hidden] { display: none; }
+.sheet {
+  width: 100%;
+  max-width: 27rem;
+  padding: 1.25rem 1.25rem 1rem;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+  animation: rise .2s cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(1.5rem); } }
+.sheet h3 {
+  margin: 0 0 .25rem;
+  font-family: var(--font-words);
+  font-weight: 600;
+  font-size: 1.375rem;
+  line-height: 1.2;
+}
+.sheet p { margin: 0 0 1.125rem; color: var(--ink-2); }
+.sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .625rem; }
+.sheet-actions .btn { width: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Accueil : réglages ===== -->
+<section id="home" class="screen active" aria-labelledby="home-title">
+  <div class="scroll home-scroll">
+    <header class="hero">
+      <svg class="plan" viewBox="0 0 240 128" aria-hidden="true">
+        <path class="wall" d="M28 112H10V12H230V112H48"/>
+        <path class="wall" d="M82 12V28M82 46V112M82 62H112M130 62H158M158 12V78M158 96V112M158 56H186M204 56H230"/>
+        <path class="leaf" d="M48 112V92"/>
+        <path class="swing" d="M48 92A20 20 0 0 0 28 112"/>
+        <path class="route" d="M38 124L46 72L82 37L120 36L121 62L120 88L158 87L194 86L195 56L194 32"/>
+        <g class="locus" style="--i:0"><circle cx="46" cy="72" r="7.5"/><text x="46" y="72">1</text></g>
+        <g class="locus" style="--i:1"><circle cx="120" cy="36" r="7.5"/><text x="120" y="36">2</text></g>
+        <g class="locus" style="--i:2"><circle cx="120" cy="88" r="7.5"/><text x="120" y="88">3</text></g>
+        <g class="locus" style="--i:3"><circle cx="194" cy="86" r="7.5"/><text x="194" y="86">4</text></g>
+        <g class="locus" style="--i:4"><circle cx="194" cy="32" r="7.5"/><text x="194" y="32">5</text></g>
+      </svg>
+      <h1 id="home-title">Palais mental</h1>
+      <p class="lede">Mémorisez une liste de mots, récitez-la de mémoire, puis vérifiez.</p>
+    </header>
+
+    <div class="field">
+      <span class="field-label" id="count-label">Nombre de mots</span>
+      <div class="stepper">
+        <button type="button" class="step" data-key="count" data-delta="-1" aria-label="Un mot de moins">−</button>
+        <div class="num-box">
+          <input id="count" class="num-input" type="number" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="1" max="1000" aria-labelledby="count-label">
+        </div>
+        <button type="button" class="step" data-key="count" data-delta="1" aria-label="Un mot de plus">+</button>
+      </div>
+      <div class="chips" data-for="count" role="group" aria-label="Nombre de mots, choix rapide">
+        <button type="button" class="chip" data-value="5">5</button>
+        <button type="button" class="chip" data-value="10">10</button>
+        <button type="button" class="chip" data-value="20">20</button>
+        <button type="button" class="chip" data-value="50">50</button>
+        <button type="button" class="chip" data-value="100">100</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="field-label" id="minutes-label">Temps de mémorisation</span>
+      <div class="stepper" id="minutes-stepper">
+        <button type="button" class="step" data-key="minutes" data-delta="-1" aria-label="Une minute de moins">−</button>
+        <div class="num-box">
+          <input id="minutes" class="num-input" type="number" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="1" max="180" aria-labelledby="minutes-label">
+          <span class="unit">min</span>
+        </div>
+        <button type="button" class="step" data-key="minutes" data-delta="1" aria-label="Une minute de plus">+</button>
+      </div>
+      <div class="chips" data-for="minutes" role="group" aria-label="Temps, choix rapide">
+        <button type="button" class="chip" data-value="1">1</button>
+        <button type="button" class="chip" data-value="2">2</button>
+        <button type="button" class="chip" data-value="5">5</button>
+        <button type="button" class="chip" data-value="10">10</button>
+        <button type="button" class="chip" data-value="inf"><span aria-hidden="true">∞</span> Sans limite</button>
+      </div>
+      <p id="pace" class="pace" aria-live="polite"></p>
+    </div>
+  </div>
+  <div class="bar home-bar">
+    <button type="button" id="start" class="btn btn-primary btn-wide">Commencer</button>
+    <p class="note"><span id="word-total">1 000</span> mots, tirés sans répétition d’une série à l’autre.</p>
+  </div>
+</section>
+
+<!-- ===== Mémorisation ===== -->
+<section id="study" class="screen" aria-labelledby="study-title">
+  <h2 id="study-title" class="sr-only">Mémorisation</h2>
+  <div class="bar study-top">
+    <button type="button" id="quit" class="icon-btn" aria-label="Abandonner la série">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div class="timer-box">
+      <div id="timer" class="timer">00:00</div>
+      <div id="timer-note" class="timer-note">restant</div>
+    </div>
+    <div class="seg" role="group" aria-label="Affichage">
+      <button type="button" id="view-list" aria-pressed="true" aria-label="Tous les mots en liste">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>
+      </button>
+      <button type="button" id="view-room" aria-pressed="false" aria-label="Un mot à la fois">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20H20V4H4V20M10 20V14M10 14A6 6 0 0 0 4 20"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="progress" aria-hidden="true"><div id="progress-fill" class="progress-fill"></div></div>
+
+  <div id="list-scroll" class="scroll list-scroll">
+    <ol id="words" class="words"></ol>
+  </div>
+
+  <div class="room-view">
+    <div id="room" class="room">
+      <div class="room-tag"><span id="room-num" class="tag">1</span><span id="room-of">sur 1</span></div>
+      <div id="room-word" class="room-word" aria-live="polite"></div>
+      <svg class="door" viewBox="0 0 50 53" aria-hidden="true">
+        <rect class="gap" x="2" y="49.5" width="46" height="4"/>
+        <path class="leaf" d="M2 51.5V5.5"/>
+        <path class="swing" d="M2 5.5A46 46 0 0 1 48 51.5"/>
+      </svg>
+    </div>
+    <div class="room-nav">
+      <button type="button" id="prev" class="btn btn-outline">Précédent</button>
+      <button type="button" id="next" class="btn btn-outline">Suivant</button>
+    </div>
+  </div>
+
+  <div class="bar study-bar">
+    <button type="button" id="done" class="btn btn-primary btn-wide">J’ai fini</button>
+  </div>
+</section>
+
+<!-- ===== Vérification ===== -->
+<section id="recall" class="screen" aria-labelledby="recall-title">
+  <div class="bar recall-top">
+    <div>
+      <h2 id="recall-title">Vérification</h2>
+      <p id="recall-meta" class="meta"></p>
+    </div>
+    <div id="score-box" class="score" role="status"><span class="check" aria-hidden="true"></span><span id="score">0 / 0</span></div>
+  </div>
+  <div id="recall-scroll" class="scroll recall-scroll">
+    <p class="hint">Récitez les mots dans l’ordre. Touchez une ligne pour révéler le mot, puis touchez-la encore si vous l’aviez retenu.</p>
+    <button type="button" id="reveal-all" class="btn btn-text reveal-all">Tout révéler</button>
+    <ol id="rows" class="rows"></ol>
+  </div>
+  <div class="bar recall-bar">
+    <button type="button" id="to-home" class="btn btn-outline">Réglages</button>
+    <button type="button" id="again" class="btn btn-primary">Nouvelle série</button>
+  </div>
+</section>
+
+<!-- ===== Confirmation d'abandon ===== -->
+<div id="dialog" class="overlay" hidden>
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-text">
+    <h3 id="dlg-title">Abandonner cette série&nbsp;?</h3>
+    <p id="dlg-text">Vous reviendrez aux réglages sans passer par la vérification.</p>
+    <div class="sheet-actions">
+      <button type="button" id="dlg-stay" class="btn btn-outline">Continuer</button>
+      <button type="button" id="dlg-quit" class="btn btn-danger">Abandonner</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const WORDS = ["canapé", "fauteuil", "chaise", "tabouret", "table", "table basse", "bureau", "armoire", "commode", "étagère", "bibliothèque", "buffet", "lit", "matelas", "oreiller", "couverture", "couette", "drap", "coussin", "tapis", "rideau", "lampe", "lampadaire", "lustre", "ampoule", "abat-jour", "miroir", "cadre", "tableau", "horloge", "pendule", "réveil", "vase", "pot de fleurs", "cheminée", "radiateur", "ventilateur", "télévision", "télécommande", "tourne-disque", "banc", "hamac", "berceau", "coffre", "malle", "portemanteau", "cintre", "paravent", "pouf", "chandelier", "bougie", "bougeoir", "sablier", "globe terrestre", "statue", "aquarium", "cage à oiseaux", "niche", "panier", "interrupteur", "prise électrique", "multiprise", "sonnette", "paillasson", "boîte aux lettres", "clé", "serrure", "cadenas", "verrou", "poignée de porte", "échelle", "escabeau", "tiroir", "heurtoir", "rocking-chair", "casserole", "poêle", "marmite", "cocotte", "louche", "spatule", "fouet", "passoire", "écumoire", "râpe", "rouleau à pâtisserie", "planche à découper", "couteau", "fourchette", "cuillère", "assiette", "bol", "tasse", "verre", "carafe", "théière", "cafetière", "bouilloire", "grille-pain", "mixeur", "batteur", "balance", "saladier", "plateau", "nappe", "tire-bouchon", "ouvre-boîte", "décapsuleur", "entonnoir", "tamis", "moule à gâteau", "ramequin", "soupière", "salière", "poivrière", "sucrier", "beurrier", "coquetier", "pichet", "gourde", "thermos", "bocal", "couvercle", "torchon", "éponge", "tablier", "gant de cuisine", "minuteur", "presse-agrumes", "casse-noix", "mortier", "pilon", "brochette", "cure-dent", "paille", "wok", "friteuse", "autocuiseur", "four", "micro-ondes", "réfrigérateur", "congélateur", "lave-vaisselle", "évier", "robinet", "brosse à dents", "dentifrice", "savon", "shampoing", "gel douche", "serviette", "peignoir", "baignoire", "douche", "lavabo", "rasoir", "mousse à raser", "peigne", "brosse à cheveux", "sèche-cheveux", "fer à lisser", "pince à épiler", "coupe-ongles", "lime à ongles", "vernis à ongles", "rouge à lèvres", "mascara", "parfum", "déodorant", "coton-tige", "mouchoir", "papier toilette", "pèse-personne", "gant de toilette", "crème solaire", "pansement", "thermomètre", "trousse de toilette", "bonnet de bain", "barrette", "élastique", "chouchou", "bigoudi", "fil dentaire", "canard en plastique", "chemise", "t-shirt", "pantalon", "jean", "short", "jupe", "robe", "manteau", "veste", "blouson", "imperméable", "pull", "gilet", "cravate", "nœud papillon", "écharpe", "foulard", "bonnet", "casquette", "chapeau", "béret", "gants", "moufles", "chaussettes", "collants", "chaussures", "baskets", "bottes", "sandales", "tongs", "pantoufles", "escarpins", "mocassins", "ceinture", "bretelles", "pyjama", "chemise de nuit", "maillot de bain", "combinaison", "salopette", "uniforme", "costume", "smoking", "kimono", "poncho", "cape", "sac à main", "sac à dos", "portefeuille", "porte-monnaie", "valise", "cartable", "parapluie", "lunettes", "lunettes de soleil", "montre", "bracelet", "collier", "bague", "boucles d’oreilles", "broche", "pendentif", "médaillon", "couronne", "diadème", "éventail", "canne", "ombrelle", "cagoule", "casque", "bandeau", "boutons de manchette", "épingle à nourrice", "fermeture éclair", "bouton", "lacet", "sabots", "espadrilles", "survêtement", "débardeur", "chemisier", "tunique", "parka", "doudoune", "anorak", "stylo", "crayon", "gomme", "taille-crayon", "règle", "équerre", "compas", "rapporteur", "calculatrice", "cahier", "carnet", "agenda", "classeur", "trombone", "agrafeuse", "perforatrice", "ciseaux", "tube de colle", "ruban adhésif", "punaise", "surligneur", "feutre", "craie", "tableau noir", "trousse", "dictionnaire", "livre", "enveloppe", "timbre", "carte postale", "lettre", "journal", "magazine", "bande dessinée", "loupe", "lampe de bureau", "tampon encreur", "pot à crayons", "corbeille à papier", "pense-bête", "porte-documents", "badge", "carte de visite", "chéquier", "billet de banque", "pièce de monnaie", "tirelire", "encrier", "stylo-plume", "crayon de couleur", "pinceau", "palette de peintre", "chevalet", "toile", "tube de peinture", "fusain", "ardoise", "buvard", "atlas", "coupe-papier", "ordinateur", "ordinateur portable", "clavier", "souris", "écran", "imprimante", "clé USB", "disque dur", "câble", "chargeur", "casque audio", "écouteurs", "micro", "webcam", "tablette", "téléphone", "radio", "appareil photo", "caméra", "projecteur", "console de jeux", "manette", "lecteur DVD", "cassette", "baladeur", "haut-parleur", "enceinte", "pile", "lampe torche", "drone", "robot", "GPS", "aspirateur", "fer à repasser", "planche à repasser", "machine à laver", "sèche-linge", "machine à coudre", "talkie-walkie", "mégaphone", "marteau", "tournevis", "clé à molette", "pince", "scie", "vis", "clou", "écrou", "boulon", "rabot", "lime", "niveau à bulle", "mètre ruban", "truelle", "pelle", "pioche", "râteau", "bêche", "fourche", "sécateur", "arrosoir", "tuyau d’arrosage", "brouette", "hache", "tronçonneuse", "perceuse", "tondeuse", "faucille", "enclume", "étau", "chalumeau", "fer à souder", "rouleau de peinture", "pot de peinture", "seau", "balai", "serpillière", "balayette", "plumeau", "chiffon", "corde", "ficelle", "chaîne", "crochet", "poulie", "levier", "cric", "pneu", "roue", "boîte à outils", "cutter", "pistolet à colle", "tenaille", "maillet", "burin", "raclette", "ponceuse", "papier de verre", "pied-de-biche", "clé anglaise", "ventouse", "jerrican", "bidon", "tonneau", "caisse", "bâche", "tuile", "brique", "planche", "cageot", "ressort", "charnière", "épouvantail", "nichoir", "mangeoire", "pierre", "caillou", "galet", "rocher", "coquillage", "étoile de mer", "plume", "feuille morte", "branche", "bûche", "pomme de pin", "gland", "champignon", "rose", "tulipe", "marguerite", "tournesol", "coquelicot", "lys", "orchidée", "lavande", "muguet", "jonquille", "pâquerette", "violette", "pissenlit", "trèfle à quatre feuilles", "cactus", "fougère", "bambou", "palmier", "sapin", "chêne", "bouleau", "saule pleureur", "érable", "olivier", "cerisier en fleurs", "cocotier", "baobab", "lierre", "rosier", "bonsaï", "roseau", "nénuphar", "algue", "corail", "cristal", "diamant", "rubis", "émeraude", "saphir", "perle", "lingot d’or", "pépite", "fossile", "météorite", "glaçon", "flocon de neige", "bonhomme de neige", "nuage", "arc-en-ciel", "éclair", "étoile filante", "lune", "soleil", "planète", "comète", "volcan", "nid", "chat", "chien", "cheval", "vache", "cochon", "mouton", "chèvre", "âne", "lapin", "poule", "coq", "poussin", "canard", "oie", "dinde", "pigeon", "moineau", "merle", "corbeau", "pie", "hibou", "chouette", "aigle", "faucon", "vautour", "perroquet", "perruche", "flamant rose", "cygne", "pélican", "pingouin", "autruche", "paon", "colibri", "cigogne", "mouette", "rouge-gorge", "hirondelle", "toucan", "lion", "tigre", "léopard", "guépard", "panthère", "loup", "renard", "ours", "ours polaire", "panda", "koala", "kangourou", "éléphant", "girafe", "zèbre", "rhinocéros", "hippopotame", "chameau", "dromadaire", "lama", "gorille", "chimpanzé", "singe", "orang-outan", "paresseux", "castor", "écureuil", "hérisson", "taupe", "rat", "hamster", "cochon d’Inde", "furet", "blaireau", "loutre", "raton laveur", "sanglier", "cerf", "biche", "renne", "bison", "buffle", "antilope", "gazelle", "hyène", "phoque", "morse", "baleine", "dauphin", "orque", "requin", "raie", "poisson rouge", "saumon", "thon", "sardine", "espadon", "poisson-clown", "hippocampe", "pieuvre", "calamar", "méduse", "crabe", "homard", "crevette", "moule", "huître", "escargot", "limace", "ver de terre", "chenille", "papillon", "abeille", "guêpe", "bourdon", "fourmi", "coccinelle", "libellule", "sauterelle", "grillon", "cigale", "mouche", "moustique", "araignée", "scorpion", "mille-pattes", "scarabée", "luciole", "grenouille", "crapaud", "tortue", "lézard", "caméléon", "serpent", "crocodile", "iguane", "salamandre", "dinosaure", "chauve-souris", "taureau", "poney", "porc-épic", "marmotte", "lynx", "ornithorynque", "suricate", "cobra", "narval", "oursin", "mante religieuse", "mammouth", "pomme", "poire", "banane", "orange", "citron", "pamplemousse", "mandarine", "fraise", "framboise", "myrtille", "cerise", "abricot", "pêche", "prune", "raisin", "figue", "datte", "kiwi", "ananas", "mangue", "papaye", "noix de coco", "grenade", "melon", "pastèque", "litchi", "fruit de la passion", "groseille", "mûre", "châtaigne", "noix", "noisette", "amande", "cacahuète", "pistache", "avocat", "olive", "coing", "kaki", "rhubarbe", "carotte", "pomme de terre", "tomate", "concombre", "courgette", "aubergine", "poivron", "piment", "oignon", "gousse d’ail", "poireau", "céleri", "radis", "navet", "betterave", "chou", "chou-fleur", "brocoli", "épinards", "laitue", "artichaut", "asperge", "haricot vert", "petit pois", "épi de maïs", "citrouille", "potiron", "patate douce", "fenouil", "endive", "cornichon", "lentille", "pois chiche", "persil", "basilic", "pain", "baguette", "croissant", "brioche", "pain au chocolat", "crêpe", "gaufre", "beignet", "tarte", "gâteau", "biscuit", "madeleine", "macaron", "éclair au chocolat", "mille-feuille", "bonbon", "sucette", "tablette de chocolat", "cornet de glace", "barbe à papa", "guimauve", "caramel", "nougat", "pot de miel", "confiture", "beurre", "fromage", "yaourt", "lait", "œuf", "omelette", "jambon", "saucisson", "saucisse", "steak", "poulet rôti", "hamburger", "frites", "pizza", "spaghetti", "lasagnes", "riz", "sushi", "sandwich", "hot-dog", "quiche", "soupe", "croque-monsieur", "fondue", "couscous", "paella", "ratatouille", "pop-corn", "chips", "céréales", "moutarde", "ketchup", "mayonnaise", "morceau de sucre", "café", "piano", "guitare", "violon", "violoncelle", "contrebasse", "harpe", "flûte", "clarinette", "hautbois", "saxophone", "trompette", "tuba", "cornemuse", "accordéon", "harmonica", "ukulélé", "banjo", "mandoline", "batterie", "tambour", "tambourin", "xylophone", "triangle", "maracas", "castagnettes", "cymbales", "gong", "cloche", "clochette", "grelot", "sifflet", "orgue", "synthétiseur", "partition", "pupitre", "ballon", "balle de tennis", "raquette", "filet", "crosse de hockey", "batte de baseball", "gant de boxe", "haltère", "corde à sauter", "trampoline", "skateboard", "trottinette", "patins à roulettes", "patins à glace", "skis", "luge", "planche de surf", "palmes", "masque de plongée", "bouée", "canoë", "kayak", "pagaie", "cerf-volant", "frisbee", "boomerang", "arc", "flèche", "cible", "fléchettes", "échiquier", "pion", "dé", "jeu de cartes", "domino", "puzzle", "queue de billard", "boule de pétanque", "quille", "club de golf", "chronomètre", "médaille", "trophée", "tente", "canne à pêche", "hameçon", "épuisette", "sac de couchage", "boussole", "jumelles", "ballon de rugby", "volant", "toupie", "yo-yo", "bille", "poupée", "ours en peluche", "petite voiture", "train électrique", "cheval à bascule", "marionnette", "bulle de savon", "pâte à modeler", "kaléidoscope", "hochet", "tétine", "biberon", "poussette", "doudou", "château de sable", "ballon de baudruche", "confettis", "masque", "perruque", "nez de clown", "cadeau", "ruban", "piñata", "feu d’artifice", "sapin de Noël", "boule de Noël", "chaudron", "baguette magique", "boule de cristal", "parchemin", "coffre au trésor", "carte au trésor", "longue-vue", "épée", "bouclier", "voiture", "camion", "bus", "moto", "scooter", "vélo", "tricycle", "tracteur", "bulldozer", "grue", "pelleteuse", "rouleau compresseur", "bétonnière", "ambulance", "camion de pompiers", "voiture de police", "taxi", "limousine", "camping-car", "caravane", "remorque", "train", "locomotive", "wagon", "tramway", "métro", "téléphérique", "avion", "hélicoptère", "planeur", "montgolfière", "dirigeable", "fusée", "navette spatiale", "soucoupe volante", "sous-marin", "bateau", "voilier", "paquebot", "péniche", "barque", "radeau", "pirogue", "gondole", "catamaran", "yacht", "hydravion", "char d’assaut", "quad", "kart", "calèche", "carrosse", "chariot", "monocycle", "deltaplane", "seringue", "stéthoscope", "béquille", "fauteuil roulant", "trousse de secours", "éprouvette", "microscope", "télescope", "squelette", "crâne", "prisme", "baromètre", "ancre", "gouvernail", "drapeau", "panneau stop", "feu tricolore", "cône de signalisation", "sceptre", "trône"];
+  const NBSP = '\u00a0';
+
+  /* ---------- État ---------- */
+  let session = null;
+  let current = 'home';
+  let tickTimer = 0;
+  let lastClock = '';
+  let dialogOpen = false;
+  let historyOK = true;
+  let leaving = false;
+  let leaveTimer = 0;
+  let wakeLock = null;
+  let wakePending = false;
+
+  /* ---------- Stockage local (réglages + ordre de tirage) ---------- */
+  const memory = Object.create(null);
+  function load(key) {
+    if (key in memory) return memory[key];
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw == null ? null : JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+  function save(key, value) {
+    memory[key] = value;
+    try { window.localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* stockage indisponible : copie en mémoire */ }
+  }
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const LIMITS = { count: [1, WORDS.length], minutes: [1, 180] };
+  const SETTINGS_KEY = 'palais-mental:settings:v1';
+  const DECK_KEY = 'palais-mental:deck:v1';
+
+  const settings = { count: 20, minutes: 5, unlimited: false, view: 'list' };
+  (() => {
+    const s = load(SETTINGS_KEY);
+    if (!s || typeof s !== 'object') return;
+    if (Number.isFinite(s.count)) settings.count = clamp(Math.round(s.count), LIMITS.count[0], LIMITS.count[1]);
+    if (Number.isFinite(s.minutes)) settings.minutes = clamp(Math.round(s.minutes), LIMITS.minutes[0], LIMITS.minutes[1]);
+    if (typeof s.unlimited === 'boolean') settings.unlimited = s.unlimited;
+    if (s.view === 'list' || s.view === 'room') settings.view = s.view;
+  })();
+  const saveSettings = () => save(SETTINGS_KEY, Object.assign({}, settings));
+
+  /* ---------- Tirage sans répétition d'une série à l'autre ---------- */
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function newDeck(exclude) {
+    const skip = new Set(exclude || []);
+    const fresh = [];
+    const later = [];
+    for (let i = 0; i < WORDS.length; i++) (skip.has(i) ? later : fresh).push(i);
+    return { size: WORDS.length, order: shuffle(fresh).concat(shuffle(later)), pos: 0 };
+  }
+  function isValidDeck(d) {
+    if (!d || typeof d !== 'object' || d.size !== WORDS.length) return false;
+    if (!Array.isArray(d.order) || d.order.length !== WORDS.length) return false;
+    if (!Number.isInteger(d.pos) || d.pos < 0 || d.pos > WORDS.length) return false;
+    const seen = new Uint8Array(WORDS.length);
+    for (const i of d.order) {
+      if (!Number.isInteger(i) || i < 0 || i >= WORDS.length || seen[i]) return false;
+      seen[i] = 1;
+    }
+    return true;
+  }
+  function drawWords(n) {
+    let deck = load(DECK_KEY);
+    if (!isValidDeck(deck)) deck = newDeck();
+    const picked = [];
+    while (picked.length < n) {
+      if (deck.pos >= deck.order.length) deck = newDeck(picked);
+      picked.push(deck.order[deck.pos++]);
+    }
+    save(DECK_KEY, deck);
+    return picked.map((i) => WORDS[i]);
+  }
+
+  /* ---------- Outils ---------- */
+  const $ = (id) => document.getElementById(id);
+  function make(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+  const decimal = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
+  const pad = (n) => String(n).padStart(2, '0');
+  const plural = (n, one, many) => (n > 1 ? many : one);
+  function clockText(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return h ? h + ':' + pad(m) + ':' + pad(s) : pad(m) + ':' + pad(s);
+  }
+  function durationText(ms) {
+    const t = Math.max(0, Math.round(ms / 1000));
+    if (t < 60) return t + NBSP + 's';
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const s = t % 60;
+    if (h) return h + NBSP + 'h' + (m ? ' ' + m + NBSP + 'min' : '');
+    return m + NBSP + 'min' + (s ? ' ' + s + NBSP + 's' : '');
+  }
+  function tagWidth(n) {
+    const d = String(n).length;
+    return d <= 2 ? '1.875rem' : d === 3 ? '2.375rem' : '2.875rem';
+  }
+
+  /* ---------- Réglages ---------- */
+  const countInput = $('count');
+  const minutesInput = $('minutes');
+
+  function fitInput(input) {
+    input.style.width = Math.max(1, String(input.value).length) + 0.4 + 'ch';
+  }
+  function paceText() {
+    if (settings.unlimited) return 'Sans limite : vous terminez quand vous voulez.';
+    const sec = (settings.minutes * 60) / settings.count;
+    let pace;
+    if (sec >= 60) {
+      const t = Math.round(sec);
+      const m = Math.floor(t / 60);
+      const s = t % 60;
+      pace = m + NBSP + 'min' + (s ? ' ' + s + NBSP + 's' : '');
+    } else {
+      pace = decimal.format(sec >= 10 ? Math.round(sec) : Math.round(sec * 10) / 10) + NBSP + 's';
+    }
+    return 'Soit environ ' + pace + ' par mot.';
+  }
+  function renderSettings() {
+    if (document.activeElement !== countInput) countInput.value = settings.count;
+    if (document.activeElement !== minutesInput) minutesInput.value = settings.minutes;
+    fitInput(countInput);
+    fitInput(minutesInput);
+    document.querySelectorAll('.chips').forEach((group) => {
+      const key = group.dataset.for;
+      group.querySelectorAll('.chip').forEach((chip) => {
+        const v = chip.dataset.value;
+        const on = v === 'inf'
+          ? settings.unlimited
+          : Number(v) === settings[key] && !(key === 'minutes' && settings.unlimited);
+        chip.setAttribute('aria-pressed', String(on));
+      });
+    });
+    $('minutes-stepper').classList.toggle('off', settings.unlimited);
+    document.querySelectorAll('.step').forEach((btn) => {
+      const key = btn.dataset.key;
+      const delta = Number(btn.dataset.delta);
+      if (key === 'minutes' && settings.unlimited) { btn.disabled = false; return; }
+      btn.disabled = delta < 0 ? settings[key] <= LIMITS[key][0] : settings[key] >= LIMITS[key][1];
+    });
+    $('pace').textContent = paceText();
+  }
+
+  document.querySelectorAll('.step').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      if (key === 'minutes' && settings.unlimited) settings.unlimited = false;
+      else settings[key] = clamp(settings[key] + Number(btn.dataset.delta), LIMITS[key][0], LIMITS[key][1]);
+      saveSettings();
+      renderSettings();
+    });
+  });
+  document.querySelectorAll('.chips').forEach((group) => {
+    group.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      const key = group.dataset.for;
+      const v = chip.dataset.value;
+      if (v === 'inf') {
+        settings.unlimited = !settings.unlimited;
+      } else {
+        settings[key] = clamp(Number(v), LIMITS[key][0], LIMITS[key][1]);
+        if (key === 'minutes') settings.unlimited = false;
+      }
+      saveSettings();
+      renderSettings();
+    });
+  });
+  function bindNumber(input, key) {
+    let dirty = false;
+    input.addEventListener('focus', () => {
+      dirty = false;
+      setTimeout(() => { try { input.select(); } catch (e) { /* ignoré */ } }, 0);
+    });
+    input.addEventListener('input', () => {
+      dirty = true;
+      fitInput(input);
+      const v = parseInt(input.value, 10);
+      if (Number.isFinite(v) && v >= LIMITS[key][0] && v <= LIMITS[key][1]) {
+        settings[key] = v;
+        if (key === 'minutes') settings.unlimited = false;
+        saveSettings();
+        renderSettings();
+      }
+    });
+    const commit = () => {
+      if (dirty) {
+        dirty = false;
+        const v = parseInt(input.value, 10);
+        if (Number.isFinite(v)) {
+          settings[key] = clamp(v, LIMITS[key][0], LIMITS[key][1]);
+          if (key === 'minutes') settings.unlimited = false;
+        }
+        saveSettings();
+      }
+      input.value = settings[key];
+      renderSettings();
+    };
+    input.addEventListener('change', commit);
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+  }
+  bindNumber(countInput, 'count');
+  bindNumber(minutesInput, 'minutes');
+
+  /* ---------- Écrans ---------- */
+  function showScreen(name) {
+    current = name;
+    ['home', 'study', 'recall'].forEach((id) => $(id).classList.toggle('active', id === name));
+  }
+  function endSession() {
+    clearInterval(tickTimer);
+    tickTimer = 0;
+    session = null;
+    letScreenSleep();
+  }
+  function showHome() {
+    closeDialog();
+    endSession();
+    showScreen('home');
+    renderSettings();
+  }
+
+  /* ---------- Bouton retour d'Android ---------- */
+  function historyState() {
+    try { return history.state; } catch (e) { return null; }
+  }
+  function pushHistory() {
+    if (!historyOK) return;
+    try { history.pushState({ pm: 'session' }, ''); } catch (e) { historyOK = false; }
+  }
+  try { history.replaceState({ pm: 'home' }, ''); } catch (e) { historyOK = false; }
+
+  function goHome() {
+    showHome();
+    const st = historyState();
+    if (historyOK && st && st.pm === 'session') {
+      leaving = true;
+      clearTimeout(leaveTimer);
+      leaveTimer = setTimeout(() => { leaving = false; }, 800);
+      try { history.back(); } catch (e) { leaving = false; }
+    }
+  }
+  window.addEventListener('popstate', () => {
+    if (leaving) {
+      leaving = false;
+      clearTimeout(leaveTimer);
+      return;
+    }
+    if (current === 'study') {
+      if (dialogOpen) {
+        showHome();
+      } else {
+        pushHistory();
+        openDialog();
+      }
+    } else if (current === 'recall') {
+      showHome();
+    }
+  });
+
+  /* ---------- Garder l'écran allumé pendant l'exercice ---------- */
+  async function keepScreenOn() {
+    if (wakeLock || wakePending || !session) return;
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    wakePending = true;
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      if (!session) {
+        lock.release().catch(() => {});
+        return;
+      }
+      wakeLock = lock;
+      lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
+    } catch (e) {
+      /* mise en veille non bloquable ici */
+    } finally {
+      wakePending = false;
+    }
+  }
+  function letScreenSleep() {
+    const lock = wakeLock;
+    wakeLock = null;
+    if (lock) lock.release().catch(() => {});
+  }
+
+  /* ---------- Séance ---------- */
+  function startSession(fromHome) {
+    closeDialog();
+    const words = drawWords(clamp(settings.count, LIMITS.count[0], LIMITS.count[1]));
+    const now = Date.now();
+    session = {
+      words,
+      unlimited: settings.unlimited,
+      durationMs: settings.minutes * 60000,
+      startAt: now,
+      endAt: now + settings.minutes * 60000,
+      studyMs: 0,
+      timeUp: false,
+      index: 0,
+      shown: words.map(() => false),
+      ok: words.map(() => false),
+    };
+    if (fromHome) pushHistory();
+    renderStudy();
+    showScreen('study');
+    clearInterval(tickTimer);
+    lastClock = '';
+    tickTimer = setInterval(tick, 250);
+    tick();
+    keepScreenOn();
+  }
+
+  function renderStudy() {
+    const n = session.words.length;
+    const list = $('words');
+    list.textContent = '';
+    list.style.setProperty('--tagw', tagWidth(n));
+    list.classList.toggle('cols', n > 12);
+    const frag = document.createDocumentFragment();
+    session.words.forEach((w, i) => {
+      const li = make('li');
+      li.append(make('span', 'tag', String(i + 1)), make('span', 'word', w));
+      frag.appendChild(li);
+    });
+    list.appendChild(frag);
+    $('list-scroll').scrollTop = 0;
+    const screen = $('study');
+    screen.classList.toggle('unlimited', session.unlimited);
+    screen.classList.remove('low');
+    $('timer-note').textContent = session.unlimited ? 'sans limite' : 'restant';
+    $('progress-fill').style.transform = 'scaleX(1)';
+    $('room-num').style.setProperty('--tagw', tagWidth(n));
+    applyView();
+    renderRoom(0);
+  }
+
+  function applyView() {
+    const room = settings.view === 'room';
+    $('study').classList.toggle('mode-room', room);
+    $('view-list').setAttribute('aria-pressed', String(!room));
+    $('view-room').setAttribute('aria-pressed', String(room));
+  }
+  $('view-list').addEventListener('click', () => {
+    if (settings.view === 'list') return;
+    settings.view = 'list';
+    saveSettings();
+    applyView();
+    if (session) {
+      const item = $('words').children[session.index];
+      if (item && typeof item.scrollIntoView === 'function') item.scrollIntoView({ block: 'center' });
+    }
+  });
+  $('view-room').addEventListener('click', () => {
+    if (settings.view === 'room') return;
+    settings.view = 'room';
+    saveSettings();
+    applyView();
+    renderRoom(0);
+  });
+
+  const WORD_SIZES = ['min(3.4rem, 13.5vw)', 'min(2.9rem, 11.5vw)', 'min(2.4rem, 9.6vw)', 'min(2.1rem, 8.4vw)'];
+  function renderRoom(direction) {
+    if (!session) return;
+    const i = session.index;
+    const n = session.words.length;
+    const w = session.words[i];
+    $('room-num').textContent = String(i + 1);
+    $('room-of').textContent = 'sur ' + n;
+    const word = $('room-word');
+    word.textContent = w;
+    const longest = w.split(/[\s\-\u2019]+/).reduce((m, part) => Math.max(m, part.length), 0);
+    word.style.setProperty('--wsize', WORD_SIZES[longest <= 7 ? 0 : longest <= 10 ? 1 : longest <= 13 ? 2 : 3]);
+    word.classList.remove('from-right', 'from-left');
+    if (direction) {
+      void word.offsetWidth;
+      word.classList.add(direction > 0 ? 'from-right' : 'from-left');
+    }
+    $('prev').disabled = i === 0;
+    $('next').textContent = i === n - 1 ? 'Au début' : 'Suivant';
+  }
+  function step(delta) {
+    if (!session || current !== 'study') return;
+    const n = session.words.length;
+    let i = session.index + delta;
+    if (i >= n) i = 0;
+    if (i < 0) return;
+    session.index = i;
+    renderRoom(delta);
+  }
+  $('prev').addEventListener('click', () => step(-1));
+  $('next').addEventListener('click', () => step(1));
+
+  (() => {
+    const room = $('room');
+    let x0 = null;
+    let y0 = 0;
+    room.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; });
+    room.addEventListener('pointerup', (e) => {
+      if (x0 == null) return;
+      const dx = e.clientX - x0;
+      const dy = e.clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) step(dx < 0 ? 1 : -1);
+    });
+    room.addEventListener('pointercancel', () => { x0 = null; });
+  })();
+
+  document.addEventListener('keydown', (e) => {
+    if (dialogOpen) {
+      if (e.key === 'Escape') closeDialog();
+      return;
+    }
+    if (current === 'study' && settings.view === 'room') {
+      if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    }
+  });
+
+  /* ---------- Minuteur ---------- */
+  function setClock(text) {
+    if (text !== lastClock) {
+      $('timer').textContent = text;
+      lastClock = text;
+    }
+  }
+  function tick() {
+    if (!session || current !== 'study') return;
+    const now = Date.now();
+    if (session.unlimited) {
+      setClock(clockText(Math.floor((now - session.startAt) / 1000)));
+      return;
+    }
+    const left = session.endAt - now;
+    if (left <= 0) {
+      setClock(clockText(0));
+      $('progress-fill').style.transform = 'scaleX(0)';
+      finishStudy(true);
+      return;
+    }
+    const sec = Math.ceil(left / 1000);
+    setClock(clockText(sec));
+    $('progress-fill').style.transform = 'scaleX(' + (left / session.durationMs).toFixed(4) + ')';
+    $('study').classList.toggle('low', sec <= 10);
+  }
+  function finishStudy(timeUp) {
+    if (!session || current !== 'study') return;
+    clearInterval(tickTimer);
+    tickTimer = 0;
+    closeDialog();
+    const elapsed = Date.now() - session.startAt;
+    session.studyMs = session.unlimited ? elapsed : Math.min(elapsed, session.durationMs);
+    session.timeUp = timeUp;
+    if (timeUp) {
+      try { if (navigator.vibrate) navigator.vibrate([180, 90, 180]); } catch (e) { /* ignoré */ }
+    }
+    renderRecall();
+    showScreen('recall');
+  }
+  $('done').addEventListener('click', () => finishStudy(false));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      tick();
+      keepScreenOn();
+    }
+  });
+
+  /* ---------- Vérification ---------- */
+  function renderRecall() {
+    const n = session.words.length;
+    const rows = $('rows');
+    rows.textContent = '';
+    rows.style.setProperty('--tagw', tagWidth(n));
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < n; i++) {
+      const li = make('li', 'row');
+      li.dataset.i = String(i);
+      const reveal = make('button', 'reveal');
+      reveal.type = 'button';
+      reveal.setAttribute('aria-label', 'Révéler le mot ' + (i + 1));
+      reveal.append(make('span', 'tag', String(i + 1)), make('span', 'blank'), make('span', 'word'));
+      const mark = make('button', 'mark');
+      mark.type = 'button';
+      mark.setAttribute('aria-pressed', 'false');
+      mark.setAttribute('aria-label', 'Mot ' + (i + 1) + ' retenu');
+      mark.appendChild(make('span', 'check'));
+      li.append(reveal, mark);
+      frag.appendChild(li);
+    }
+    rows.appendChild(frag);
+    const label = n + NBSP + plural(n, 'mot', 'mots');
+    $('recall-meta').textContent = session.timeUp
+      ? label + ', temps écoulé (' + durationText(session.studyMs) + ')'
+      : label + ', ' + plural(n, 'mémorisé', 'mémorisés') + ' en ' + durationText(session.studyMs);
+    updateScore();
+    updateRevealAll();
+    $('recall-scroll').scrollTop = 0;
+  }
+  function reveal(i) {
+    session.shown[i] = true;
+    const li = $('rows').children[i];
+    li.classList.add('shown');
+    li.querySelector('.word').textContent = session.words[i];
+    li.querySelector('.reveal').setAttribute('aria-label', 'Mot ' + (i + 1) + ' : ' + session.words[i]);
+    updateRevealAll();
+  }
+  function toggleOk(i) {
+    session.ok[i] = !session.ok[i];
+    const li = $('rows').children[i];
+    li.classList.toggle('ok', session.ok[i]);
+    li.querySelector('.mark').setAttribute('aria-pressed', String(session.ok[i]));
+    updateScore();
+  }
+  function updateScore() {
+    const n = session.words.length;
+    const k = session.ok.filter(Boolean).length;
+    $('score').textContent = k + ' / ' + n;
+    $('score-box').setAttribute('aria-label', k + ' sur ' + n + ' ' + plural(n, 'mot retenu', 'mots retenus'));
+  }
+  function updateRevealAll() {
+    const all = session.shown.every(Boolean);
+    const btn = $('reveal-all');
+    btn.disabled = all;
+    btn.textContent = all ? 'Tout est révélé' : 'Tout révéler';
+  }
+  $('rows').addEventListener('click', (e) => {
+    if (!session) return;
+    const li = e.target.closest('.row');
+    if (!li) return;
+    const i = Number(li.dataset.i);
+    if (!session.shown[i]) reveal(i);
+    else toggleOk(i);
+  });
+  $('reveal-all').addEventListener('click', () => {
+    if (!session) return;
+    session.words.forEach((_, i) => { if (!session.shown[i]) reveal(i); });
+  });
+  $('again').addEventListener('click', () => startSession(false));
+  $('to-home').addEventListener('click', goHome);
+  $('start').addEventListener('click', () => {
+    const active = document.activeElement;
+    if (active && active !== document.body && typeof active.blur === 'function') active.blur();
+    startSession(true);
+  });
+
+  /* ---------- Dialogue d'abandon ---------- */
+  function openDialog() {
+    if (dialogOpen) return;
+    dialogOpen = true;
+    $('dialog').hidden = false;
+    setTimeout(() => { try { $('dlg-stay').focus(); } catch (e) { /* ignoré */ } }, 0);
+  }
+  function closeDialog() {
+    if (!dialogOpen) return;
+    dialogOpen = false;
+    $('dialog').hidden = true;
+  }
+  $('quit').addEventListener('click', openDialog);
+  $('dlg-stay').addEventListener('click', closeDialog);
+  $('dlg-quit').addEventListener('click', goHome);
+  $('dialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeDialog(); });
+
+  /* ---------- Démarrage ---------- */
+  $('word-total').textContent = WORDS.length.toLocaleString('fr-FR');
+  renderSettings();
+
+  /* ---------- Fonctionnement hors ligne (appli installée) ---------- */
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* hors ligne indisponible ici */ });
+    });
+  }
+})();
+</script>
+</body>
+</html>
